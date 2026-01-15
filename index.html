@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Trash Collection System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .tech-pattern {
+            background-image: 
+                linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .dashboard-bg {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .status-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+
+        .control-btn {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .control-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .category-bar {
+            height: 8px;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .auth-container {
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .form-input {
+            transition: all 0.3s;
+            border: 2px solid #e5e7eb;
+        }
+
+        .form-input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Smooth transitions */
+        .page-enter {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .page-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 300ms, transform 300ms;
+        }
+
+        .page-exit {
+            opacity: 1;
+        }
+
+        .page-exit-active {
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 300ms, transform 300ms;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Authentication Container -->
+    <div id="auth-container" class="min-h-screen gradient-bg flex items-center justify-center p-4">
+        <div class="auth-container">
+            <!-- Login Form -->
+            <div id="login-form" class="card p-8">
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">Welcome Back</h2>
+                    <p class="text-gray-600">Sign in to your dashboard</p>
+                </div>
+
+                <!-- Error Message -->
+                <div id="login-error" class="hidden bg-red-50 text-red-700 p-4 rounded-lg mb-4">
+                    <p id="login-error-text"></p>
+                </div>
+
+                <!-- Success Message -->
+                <div id="login-success" class="hidden bg-green-50 text-green-700 p-4 rounded-lg mb-4">
+                    <p>Sign in successful! Redirecting...</p>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2" for="login-email">
+                            Email Address
+                        </label>
+                        <input 
+                            type="email" 
+                            id="login-email" 
+                            class="form-input w-full p-3 rounded-lg"
+                            placeholder="you@example.com"
+                        >
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2" for="login-password">
+                            Password
+                        </label>
+                        <div class="relative">
+                            <input 
+                                type="password" 
+                                id="login-password" 
+                                class="form-input w-full p-3 rounded-lg pr-10"
+                                placeholder="••••••••"
+                            >
+                            <button 
+                                type="button" 
+                                class="absolute right-3 top-3 text-gray-500 hover:text-gray-700"
+                                onclick="togglePassword('login-password', 'login-toggle')"
+                                id="login-toggle"
+                            >
+                                👁
+                            </button>
+                        </div>
+                    </div>
+
+                    <button 
+                        id="login-btn"
+                        onclick="signIn()"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-300 flex items-center justify-center"
+                    >
+                        <span id="login-text">Sign In</span>
+                        <div id="login-spinner" class="loading-spinner hidden ml-2"></div>
+                    </button>
+
+                    <div class="text-center pt-4 border-t">
+                        <p class="text-gray-600">
+                            Don't have an account?
+                            <button 
+                                onclick="showSignUp()"
+                                class="text-blue-600 hover:text-blue-800 font-medium ml-1"
+                            >
+                                Sign Up
+                            </button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Signup Form -->
+            <div id="signup-form" class="card p-8 hidden">
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">Create Account</h2>
+                    <p class="text-gray-600">Join our smart cleaning system</p>
+                </div>
+
+                <!-- Error Message -->
+                <div id="signup-error" class="hidden bg-red-50 text-red-700 p-4 rounded-lg mb-4">
+                    <p id="signup-error-text"></p>
+                </div>
+
+                <!-- Success Message -->
+                <div id="signup-success" class="hidden bg-green-50 text-green-700 p-4 rounded-lg mb-4">
+                    <p>Account created successfully!</p>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2" for="signup-name">
+                            Full Name
+                        </label>
+                        <input 
+                            type="text" 
+                            id="signup-name" 
+                            class="form-input w-full p-3 rounded-lg"
+                            placeholder="John Doe"
+                        >
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2" for="signup-email">
+                            Email Address
+                        </label>
+                        <input 
+                            type="email" 
+                            id="signup-email" 
+                            class="form-input w-full p-3 rounded-lg"
+                            placeholder="you@example.com"
+                        >
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2" for="signup-password">
+                            Password
+                        </label>
+                        <div class="relative">
+                            <input 
+                                type="password" 
+                                id="signup-password" 
+                                class="form-input w-full p-3 rounded-lg pr-10"
+                                placeholder="••••••••"
+                                minlength="6"
+                            >
+                            <button 
+                                type="button" 
+                                class="absolute right-3 top-3 text-gray-500 hover:text-gray-700"
+                                onclick="togglePassword('signup-password', 'signup-toggle')"
+                                id="signup-toggle"
+                            >
+                                👁
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Must be at least 6 characters</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2" for="signup-confirm">
+                            Confirm Password
+                        </label>
+                        <div class="relative">
+                            <input 
+                                type="password" 
+                                id="signup-confirm" 
+                                class="form-input w-full p-3 rounded-lg pr-10"
+                                placeholder="••••••••"
+                            >
+                            <button 
+                                type="button" 
+                                class="absolute right-3 top-3 text-gray-500 hover:text-gray-700"
+                                onclick="togglePassword('signup-confirm', 'confirm-toggle')"
+                                id="confirm-toggle"
+                            >
+                                👁
+                            </button>
+                        </div>
+                    </div>
+
+                    <button 
+                        id="signup-btn"
+                        onclick="signUp()"
+                        class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-300 flex items-center justify-center"
+                    >
+                        <span id="signup-text">Create Account</span>
+                        <div id="signup-spinner" class="loading-spinner hidden ml-2"></div>
+                    </button>
+
+                    <div class="text-center pt-4 border-t">
+                        <p class="text-gray-600">
+                            Already have an account?
+                            <button 
+                                onclick="showLogin()"
+                                class="text-blue-600 hover:text-blue-800 font-medium ml-1"
+                            >
+                                Sign In
+                            </button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Container -->
+    <div id="dashboard-container" class="min-h-screen dashboard-bg hidden">
+        <!-- Header -->
+        <header class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Smart Trash Collection System</h1>
+                        <p class="text-gray-600">Welcome, <span id="user-name" class="font-medium"></span></p>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full bg-green-500 status-pulse"></div>
+                            <span class="text-sm font-medium text-gray-700">Connected</span>
+                        </div>
+                        <button 
+                            onclick="logout()"
+                            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition"
+                        >
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Card 1: System Status -->
+                <div class="card p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-6">System Status</h2>
+                    <div class="flex flex-col items-center gap-6">
+                        <!-- Robot Icon -->
+                        <svg class="w-32 h-32" viewBox="0 0 200 200" fill="none">
+                            <circle cx="100" cy="60" r="35" fill="#3b82f6" opacity="0.2" />
+                            <circle cx="100" cy="60" r="30" fill="#3b82f6" />
+                            <circle cx="88" cy="55" r="5" fill="white" />
+                            <circle cx="112" cy="55" r="5" fill="white" />
+                            <path d="M 90 70 Q 100 75 110 70" stroke="white" stroke-width="3" stroke-linecap="round" fill="none" />
+                            <rect x="70" y="95" width="60" height="70" rx="8" fill="#4f46e5" />
+                            <rect x="75" y="100" width="50" height="35" rx="4" fill="#6366f1" />
+                            <rect x="50" y="110" width="20" height="40" rx="5" fill="#3b82f6" />
+                            <rect x="130" y="110" width="20" height="40" rx="5" fill="#3b82f6" />
+                            <circle cx="85" cy="175" r="8" fill="#1e40af" />
+                            <circle cx="115" cy="175" r="8" fill="#1e40af" />
+                        </svg>
+                        
+                        <!-- Status Items -->
+                        <div class="w-full space-y-4">
+                            <div class="flex items-center justify-between p-3 rounded-lg bg-green-50">
+                                <span class="font-medium text-green-800">Connection</span>
+                                <span class="font-bold text-green-600">Active</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 rounded-lg bg-blue-50">
+                                <span class="font-medium text-blue-800">Battery</span>
+                                <span class="font-bold text-blue-600">85%</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 rounded-lg bg-gray-100">
+                                <span class="font-medium text-gray-800">State</span>
+                                <span class="font-bold px-3 py-1 rounded bg-gray-200 text-gray-700">IDLE</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Collection Statistics -->
+                <div class="card p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-6">Collection Statistics</h2>
+                    <div class="text-center mb-8">
+                        <p class="text-sm font-medium text-gray-600 mb-2">Total Items Collected</p>
+                        <div id="total-count" class="stat-number text-blue-600">0</div>
+                    </div>
+                    
+                    <div class="space-y-4 mb-6">
+                        <!-- Plastic -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-5 h-5 rounded-full bg-blue-500"></div>
+                                    <span class="font-medium text-gray-800">Plastic</span>
+                                </div>
+                                <span id="plastic-count" class="font-bold text-blue-600">0</span>
+                            </div>
+                            <div class="w-full rounded-full bg-blue-100">
+                                <div id="plastic-bar" class="category-bar bg-blue-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Organic -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-5 h-5 rounded-full bg-green-500"></div>
+                                    <span class="font-medium text-gray-800">Organic</span>
+                                </div>
+                                <span id="organic-count" class="font-bold text-green-600">0</span>
+                            </div>
+                            <div class="w-full rounded-full bg-green-100">
+                                <div id="organic-bar" class="category-bar bg-green-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Metal -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-5 h-5 rounded-full bg-yellow-500"></div>
+                                    <span class="font-medium text-gray-800">Metal</span>
+                                </div>
+                                <span id="metal-count" class="font-bold text-yellow-600">0</span>
+                            </div>
+                            <div class="w-full rounded-full bg-yellow-100">
+                                <div id="metal-bar" class="category-bar bg-yellow-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Other -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-5 h-5 rounded-full bg-gray-500"></div>
+                                    <span class="font-medium text-gray-800">Other</span>
+                                </div>
+                                <span id="other-count" class="font-bold text-gray-600">0</span>
+                            </div>
+                            <div class="w-full rounded-full bg-gray-100">
+                                <div id="other-bar" class="category-bar bg-gray-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button 
+                        id="simulate-btn"
+                        onclick="simulateCollection()"
+                        class="w-full py-3 px-6 rounded-lg font-semibold text-white bg-green-600 hover:bg-green-700 transition"
+                    >
+                        Simulate Collection Event
+                    </button>
+                </div>
+
+                <!-- Card 3: Robot Control -->
+                <div class="card p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-6">Robot Control</h2>
+                    <div class="text-center mb-8">
+                        <p class="text-sm font-medium text-gray-600 mb-2">Power Status</p>
+                        <p id="power-status" class="text-lg font-semibold text-gray-700">Robot is Idle</p>
+                    </div>
+                    
+                    <!-- Directional Control Pad -->
+                    <div class="flex flex-col items-center gap-2 mb-8">
+                        <button class="control-btn w-16 h-16 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z" />
+                            </svg>
+                        </button>
+                        <div class="flex gap-2">
+                            <button class="control-btn w-16 h-16 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center justify-center">
+                                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6z" />
+                                </svg>
+                            </button>
+                            <button class="control-btn w-16 h-16 rounded-lg bg-gray-300 hover:bg-gray-400 flex items-center justify-center">
+                                <div class="w-4 h-4 rounded-full bg-gray-600"></div>
+                            </button>
+                            <button class="control-btn w-16 h-16 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center justify-center">
+                                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <button class="control-btn w-16 h-16 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <!-- Start/Stop Controls -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <button class="py-3 px-6 rounded-lg font-semibold text-white bg-green-600 hover:bg-green-700 control-btn">
+                            Start
+                        </button>
+                        <button class="py-3 px-6 rounded-lg font-semibold text-white bg-red-600 hover:bg-red-700 control-btn">
+                            Stop
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="mt-8 text-center">
+                <p class="text-sm text-gray-600">Last Updated: <span id="timestamp" class="font-medium"></span></p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ==================== FIREBASE CONFIGURATION ====================
+        const firebaseConfig = {
+            apiKey: "AIzaSyAnZZNoL3lQe191qHd6nGIFJXzW1jFs32M",
+            authDomain: "trashcleaning-ee791.firebaseapp.com",
+            projectId: "trashcleaning-ee791",
+            storageBucket: "trashcleaning-ee791.firebasestorage.app",
+            messagingSenderId: "706441550226",
+            appId: "1:706441550226:web:febb0006933f38699fc94b",
+            measurementId: "G-2EM1HWPZVF"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // ==================== AUTHENTICATION FUNCTIONS ====================
+        function showSignUp() {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('signup-form').classList.remove('hidden');
+            clearMessages();
+        }
+
+        function showLogin() {
+            document.getElementById('signup-form').classList.add('hidden');
+            document.getElementById('login-form').classList.remove('hidden');
+            clearMessages();
+        }
+
+        function togglePassword(inputId, buttonId) {
+            const input = document.getElementById(inputId);
+            const button = document.getElementById(buttonId);
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                button.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                button.textContent = '👁';
+            }
+        }
+
+        function clearMessages() {
+            const errors = ['login-error', 'login-success', 'signup-error', 'signup-success'];
+            errors.forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+        }
+
+        async function signIn() {
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            
+            // Validation
+            if (!email || !password) {
+                showError('login-error', 'Please fill in all fields');
+                return;
+            }
+            
+            // Show loading
+            const btn = document.getElementById('login-btn');
+            const btnText = document.getElementById('login-text');
+            const spinner = document.getElementById('login-spinner');
+            
+            btn.disabled = true;
+            btnText.textContent = 'Signing in...';
+            spinner.classList.remove('hidden');
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                
+                // Success
+                showSuccess('login-success');
+                
+                // Store user info
+                localStorage.setItem('user', JSON.stringify({
+                    uid: userCredential.user.uid,
+                    email: userCredential.user.email,
+                    name: userCredential.user.displayName || email.split('@')[0]
+                }));
+                
+                // Switch to dashboard after delay
+                setTimeout(() => {
+                    showDashboard(userCredential.user);
+                }, 1000);
+                
+            } catch (error) {
+                // Handle errors
+                let errorMessage = 'An error occurred';
+                
+                switch (error.code) {
+                    case 'auth/invalid-email':
+                        errorMessage = 'Invalid email address';
+                        break;
+                    case 'auth/user-disabled':
+                        errorMessage = 'This account has been disabled';
+                        break;
+                    case 'auth/user-not-found':
+                        errorMessage = 'No account found with this email';
+                        break;
+                    case 'auth/wrong-password':
+                        errorMessage = 'Incorrect password';
+                        break;
+                    case 'auth/too-many-requests':
+                        errorMessage = 'Too many attempts. Try again later';
+                        break;
+                    default:
+                        errorMessage = error.message;
+                }
+                
+                showError('login-error', errorMessage);
+                
+            } finally {
+                // Reset button
+                btn.disabled = false;
+                btnText.textContent = 'Sign In';
+                spinner.classList.add('hidden');
+            }
+        }
+
+        async function signUp() {
+            const name = document.getElementById('signup-name').value.trim();
+            const email = document.getElementById('signup-email').value.trim();
+            const password = document.getElementById('signup-password').value;
+            const confirm = document.getElementById('signup-confirm').value;
+            
+            // Validation
+            if (!name || !email || !password || !confirm) {
+                showError('signup-error', 'Please fill in all fields');
+                return;
+            }
+            
+            if (password.length < 6) {
+                showError('signup-error', 'Password must be at least 6 characters');
+                return;
+            }
+            
+            if (password !== confirm) {
+                showError('signup-error', 'Passwords do not match');
+                return;
+            }
+            
+            // Show loading
+            const btn = document.getElementById('signup-btn');
+            const btnText = document.getElementById('signup-text');
+            const spinner = document.getElementById('signup-spinner');
+            
+            btn.disabled = true;
+            btnText.textContent = 'Creating account...';
+            spinner.classList.remove('hidden');
+            
+            try {
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                
+                // Update profile with name
+                await userCredential.user.updateProfile({
+                    displayName: name
+                });
+                
+                // Create user document in Firestore
+                await db.collection('users').doc(userCredential.user.uid).set({
+                    name: name,
+                    email: email,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    stats: {
+                        plastic: 0,
+                        organic: 0,
+                        metal: 0,
+                        other: 0,
+                        total: 0
+                    }
+                });
+                
+                // Success
+                showSuccess('signup-success');
+                
+                // Store user info
+                localStorage.setItem('user', JSON.stringify({
+                    uid: userCredential.user.uid,
+                    email: userCredential.user.email,
+                    name: name
+                }));
+                
+                // Switch to dashboard after delay
+                setTimeout(() => {
+                    showDashboard(userCredential.user);
+                }, 1000);
+                
+            } catch (error) {
+                // Handle errors
+                let errorMessage = 'An error occurred';
+                
+                switch (error.code) {
+                    case 'auth/email-already-in-use':
+                        errorMessage = 'Email already in use';
+                        break;
+                    case 'auth/invalid-email':
+                        errorMessage = 'Invalid email address';
+                        break;
+                    case 'auth/operation-not-allowed':
+                        errorMessage = 'Email/password accounts are not enabled';
+                        break;
+                    case 'auth/weak-password':
+                        errorMessage = 'Password is too weak';
+                        break;
+                    default:
+                        errorMessage = error.message;
+                }
+                
+                showError('signup-error', errorMessage);
+                
+            } finally {
+                // Reset button
+                btn.disabled = false;
+                btnText.textContent = 'Create Account';
+                spinner.classList.add('hidden');
+            }
+        }
+
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            const textElement = document.getElementById(elementId + '-text');
+            
+            textElement.textContent = message;
+            element.classList.remove('hidden');
+            
+            // Scroll to error
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function showSuccess(elementId) {
+            document.getElementById(elementId).classList.remove('hidden');
+        }
+
+        function showDashboard(user) {
+            // Update user name
+            document.getElementById('user-name').textContent = user.displayName || user.email.split('@')[0];
+            
+            // Hide auth, show dashboard
+            document.getElementById('auth-container').classList.add('hidden');
+            document.getElementById('dashboard-container').classList.remove('hidden');
+            
+            // Load user stats from Firestore
+            loadUserStats(user.uid);
+            
+            // Initialize dashboard functionality
+            initDashboard();
+        }
+
+        function logout() {
+            auth.signOut().then(() => {
+                localStorage.removeItem('user');
+                document.getElementById('dashboard-container').classList.add('hidden');
+                document.getElementById('auth-container').classList.remove('hidden');
+                showLogin();
+                clearMessages();
+            });
+        }
+
+        // ==================== DASHBOARD FUNCTIONS ====================
+        let stats = {
+            plastic: 0,
+            organic: 0,
+            metal: 0,
+            other: 0,
+            total: 0
+        };
+
+        function initDashboard() {
+            updateTimestamp();
+            updateStatistics();
+            
+            // Auto-update timestamp every second
+            setInterval(updateTimestamp, 1000);
+            
+            // Add keyboard shortcuts
+            document.addEventListener('keypress', function(event) {
+                if (event.key === 's' || event.key === 'S') {
+                    simulateCollection();
+                }
+            });
+        }
+
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('timestamp').textContent = now.toLocaleString();
+        }
+
+        function updateStatistics() {
+            stats.total = stats.plastic + stats.organic + stats.metal + stats.other;
+            
+            document.getElementById('total-count').textContent = stats.total;
+            document.getElementById('plastic-count').textContent = stats.plastic;
+            document.getElementById('organic-count').textContent = stats.organic;
+            document.getElementById('metal-count').textContent = stats.metal;
+            document.getElementById('other-count').textContent = stats.other;
+
+            const maxValue = Math.max(stats.plastic, stats.organic, stats.metal, stats.other, 1);
+            document.getElementById('plastic-bar').style.width = `${(stats.plastic / maxValue) * 100}%`;
+            document.getElementById('organic-bar').style.width = `${(stats.organic / maxValue) * 100}%`;
+            document.getElementById('metal-bar').style.width = `${(stats.metal / maxValue) * 100}%`;
+            document.getElementById('other-bar').style.width = `${(stats.other / maxValue) * 100}%`;
+        }
+
+        async function simulateCollection() {
+            const categories = ['plastic', 'organic', 'metal', 'other'];
+            const randomCategory = categories[Math.floor(Math.random() * categories.length)];
+            const randomAmount = Math.floor(Math.random() * 5) + 1;
+            
+            stats[randomCategory] += randomAmount;
+            updateStatistics();
+            updateTimestamp();
+            
+            // Save to Firestore if user is logged in
+            const user = auth.currentUser;
+            if (user) {
+                try {
+                    await db.collection('users').doc(user.uid).update({
+                        [`stats.${randomCategory}`]: firebase.firestore.FieldValue.increment(randomAmount),
+                        [`stats.total`]: firebase.firestore.FieldValue.increment(randomAmount)
+                    });
+                } catch (error) {
+                    console.error('Error saving stats:', error);
+                }
+            }
+            
+            // Animation effect
+            const btn = document.getElementById('simulate-btn');
+            btn.textContent = 'Collected!';
+            btn.classList.add('bg-green-700');
+            
+            setTimeout(() => {
+                btn.textContent = 'Simulate Collection Event';
+                btn.classList.remove('bg-green-700');
+            }, 1000);
+        }
+
+        async function loadUserStats(userId) {
+            try {
+                const doc = await db.collection('users').doc(userId).get();
+                if (doc.exists) {
+                    const userData = doc.data();
+                    if (userData.stats) {
+                        stats = userData.stats;
+                        updateStatistics();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading user stats:', error);
+            }
+        }
+
+        // ==================== INITIALIZATION ====================
+        // Check if user is already logged in
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                showDashboard(user);
+            } else {
+                // Show login form by default
+                showLogin();
+            }
+        });
+
+        // Enter key support for forms
+        document.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                if (!document.getElementById('login-form').classList.contains('hidden')) {
+                    signIn();
+                } else if (!document.getElementById('signup-form').classList.contains('hidden')) {
+                    signUp();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
